@@ -75,17 +75,16 @@ def contract_down(T, bra, D):
 
     # make truncated lr basis
     bigD=len(eigl)
-    ltrunc=np.sum(eigl[bigD-D:bigD])
-    rtrunc=np.sum(eigr[bigD-D:bigD])
-
+    Deff=min(D,bigD)
+    ltrunc=np.sum(eigl[:bigD-Deff])
+    rtrunc=np.sum(eigr[:bigD-Deff])
     # choose either the left vectors or right vectors
     # depending on which gives a smaller truncation
-    if D<bigD and ltrunc<rtrunc:
-        Ulr=vecl[:,bigD-D:bigD]
+    if Deff<bigD and ltrunc<rtrunc:
+        Ulr=vecl[:,bigD-Deff:bigD]
     else:
-        Ulr=vecr[:,bigD-D:bigD]
-
-    #print "truncations", ltrunc, rtrunc
+        Ulr=vecr[:,bigD-Deff:bigD]
+    print 'bigD/ltrunc/rtrunc=',bigD,ltrunc,rtrunc,bigD-Deff,Ulr.shape
     
     # TT : lrud
     #TT = np.einsum("lrud,la->arud", TT, Ulr)
@@ -109,21 +108,22 @@ def heisenT(beta):
 
 def time_evol():
     ns = 11
-    eps = -0.01/2**ns
+    eps = 0.1 #-0.1 #-0.01/2**ns
+
     #T0 = heisenT(eps)
     #Z0 = np.dot(np.dot(bra, np.einsum("lrNN->lr", T)), bra)
     
     T, bra = get_mpo_nn(eps)
-    nsite = 7
-    T,bra = modelN(nsite,eps,h=10)
+    nsite = 2
+    T,bra = modelN(nsite,eps,h=0.)
 
     #
     # (1-eH)^N, ||H||^n get large very quickly.
     #
-    D = 2
+    D = 100
     logRenorm = 0.
     scale = True #False
-    for i in range(2+ns):
+    for i in range(2):#+ns):
 	Tnorm = np.linalg.norm(T)
 	Bnorm = np.linalg.norm(bra)
 	print 'Tnorm=',Tnorm,'Bnorm=',Bnorm
@@ -134,7 +134,8 @@ def time_evol():
 	   logRenorm += 4*math.log(Bnorm)
 	   bra = bra/Bnorm
 	T, bra = contract_down(T, bra, D)
-        Z = np.dot(np.dot(bra, np.einsum("lrNN->lr", T)), bra)
+ 	trT = np.einsum("lrNN->lr", T)
+        Z = np.dot(np.dot(bra, trT), bra)
 	print
 	print 'iter=',i
 	if scale:
@@ -143,6 +144,17 @@ def time_evol():
 	   print 'sum=',sumlnZ,math.exp(sumlnZ),sumlnZ/nsite
 	else:
 	   print 'Z=',Z,math.log(Z)
+
+    #print trT
+    xsite = 4/nsite
+    Tn = np.linalg.matrix_power(trT,xsite)
+    Z = np.dot(np.dot(bra, Tn), bra)
+    print 
+    print 'Z=',Z
+    sumlnZ = math.log(Z)+xsite*logRenorm
+    nsite *= xsite
+    print 'nsite=',nsite
+    print 'sum=',sumlnZ,sumlnZ/nsite
 
 
 def boundary_check():
