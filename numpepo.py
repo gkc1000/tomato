@@ -6,30 +6,32 @@ import scipy.linalg
 I = np.eye(2)
 Sz = 2*np.array([[.5, 0.], [0., -0.5]])
 
-def modelN(n,eps,h=0):
-   T,bra = get_mpo_nn(eps,h)
+def modelN(T,n):
    Tmp = T.copy()
    for i in range(1,n):
       Tmp = np.einsum('lrud,rRUD->lRuUdD',Tmp,T)
       s = Tmp.shape
       Tmp = Tmp.reshape((s[0],s[1],s[2]*s[3],s[4]*s[5]))
-   return Tmp,bra
+   return Tmp
 
-def get_mpo_nn(eps,h=0):
+def get_mpo_nn(eps,h=0,iop=0):
     T = np.zeros([2,2,2,2])
     T[0,0,:,:] = I
-    
-    aeps = math.sqrt(abs(eps))
-    if eps>0.:
-       sgn = 1.0
+   
+    if iop == 0:
+       aeps = math.sqrt(abs(eps))
+       if eps>0.:
+          sgn = 1.0
+       else:
+          sgn = -1.0
+       T[0,1,:,:] = aeps * Sz
+       T[1,0,:,:] = sgn*aeps * Sz
+   
     else:
-       sgn = -1.0
-    T[0,1,:,:] = aeps * Sz
-    T[1,0,:,:] = sgn*aeps * Sz
-    
+       T[0,1,:,:] = Sz
+       T[1,0,:,:] = eps*Sz
+
     if abs(h) > 1.e-12: T[0,0] += eps*h*Sz
-    #T[0,1,:,:] = Sz
-    #T[1,0,:,:] = eps*Sz
 
     bra = np.zeros([2])
     bra[0] = 1.
@@ -44,7 +46,7 @@ def hosvd(T,index_type):
 	#DM=np.einsum("ajkl,Ajkl->aA",T,T)
     elif index_type == "r":
         tmp = T.transpose(1,0,2,3)
-        tmp = T.reshape(s[0],s[1]*s[2]*s[3])
+        tmp = tmp.reshape(s[0],s[1]*s[2]*s[3])
 	DM = tmp.dot(tmp.T)
 	#DM=np.einsum("ibkl,iBkl->bB",T,T)
     elif index_type == "u":
@@ -106,24 +108,13 @@ def heisenT(beta):
     T=np.einsum("al,ar->lr",W,W)
     return T
 
-def time_evol():
-    ns = 11
-    eps = 0.1 #-0.1 #-0.01/2**ns
-
-    #T0 = heisenT(eps)
-    #Z0 = np.dot(np.dot(bra, np.einsum("lrNN->lr", T)), bra)
-    
-    T, bra = get_mpo_nn(eps)
-    nsite = 2
-    T,bra = modelN(nsite,eps,h=0.)
-
+def time_evol(T,bra,ns,nsite,D):
     #
     # (1-eH)^N, ||H||^n get large very quickly.
     #
-    D = 100
     logRenorm = 0.
     scale = True #False
-    for i in range(2):#+ns):
+    for i in range(ns):
 	Tnorm = np.linalg.norm(T)
 	Bnorm = np.linalg.norm(bra)
 	print 'Tnorm=',Tnorm,'Bnorm=',Bnorm
@@ -145,83 +136,58 @@ def time_evol():
 	else:
 	   print 'Z=',Z,math.log(Z)
 
-    #print trT
-    xsite = 4/nsite
-    Tn = np.linalg.matrix_power(trT,xsite)
-    Z = np.dot(np.dot(bra, Tn), bra)
-    print 
-    print 'Z=',Z
-    sumlnZ = math.log(Z)+xsite*logRenorm
-    nsite *= xsite
-    print 'nsite=',nsite
-    print 'sum=',sumlnZ,sumlnZ/nsite
+    return T,bra,trT,logRenorm
 
+def contract_x(xsite,trT,logRenorm):
+    #Tn = np.linalg.matrix_power(trT,xsite)
+    tmp = logRenorm
+    Tn = trT
+    for i in range(xsite):
+       Tn = Tn.dot(Tn)
+       fac = np.linalg.norm(Tn)
+       Tn /= fac
+       tmp *= 2
+       tmp += math.log(fac)
+    Z = np.einsum('ii',Tn)
+    sumlnZ = math.log(Z)+tmp
+    #Z = np.dot(np.dot(bra, Tn), bra)
+    #print 
+    #print 'Z=',Z
+    #sumlnZ = math.log(Z)+xsite*logRenorm
+    return sumlnZ
 
-def boundary_check():
+def test():
+    nclst = 2
+    tmp = 0
+    ns = 4 #10 #+ tmp #10
+    eps = -0.01/2**(2+tmp) #11
+    D = 40 
+    res = [0]*2
+    nsite = 40
+    for iop in [0,1]:
+       print '='*20
+       print 'iop=',iop
+       print '='*20
+       T,bra = get_mpo_nn(eps,h=0.,iop=iop)
+       T = modelN(T,nclst)
+       beta = abs(eps)*2**ns
+       xsite = 10 
+       T,bra,trT,logRenorm = time_evol(T,bra,ns,nsite,D)
+       sumlnZ = contract_x(xsite,trT,logRenorm)
+       nsite = 2**xsite
+       val = sumlnZ/(nsite*nclst)
+       print 'eps =',eps
+       print 'beta=',beta
+       print 'nsite=',nsite
+       print 'sum=',sumlnZ,val
+       res[iop] = val 
+       trT = heisenT(beta)
+       sumlnZ = contract_x(xsite,trT,0.)
+       val = sumlnZ/nsite
+       print
+       print 'sum=',sumlnZ,val
 
-   #M = heisenT(0.)
+    print
+    print res
 
-   # different values of beta
-   # we are multiplying out (1-eps H)(1-eps H)
-   #
-   #
-   print "eps  E (from tr)  E (from bra/ket)"
-
-   for eps in [0, 0.005, 0.01, 0.02]:
-
-        #M = heisenT(math.sqrt(2)*eps)
-        T, bra = get_mpo_nn(eps) # boundary is vacuum state
-
-        D = 4
-        TT, bra = contract_down(T, bra, 4)
-        M = np.einsum("lrII->lr", TT)
-
-        E_fac = 0.
-
-        # a quick demonstration using the 
-        # Ising tensor, that the free energy is invariant to boundary
-
-        # do 2**20 sites
-        for i in range(20):
-            M = np.dot(M,M)
-            fac = np.linalg.norm(M)
-            M /= fac
-
-            E_fac *= 2
-            E_fac += math.log(fac)
-            #print E_fac
-
-            nsites = 2**(i+1)
-
-	    bound_E = (math.log(np.dot(np.dot(bra, M), bra.T)) + E_fac) / nsites
-            tr_E = (math.log(np.trace(M)) + E_fac)/nsites
-            print i,nsites*bound_E,nsites*tr_E
-            
-            #print "# sites %i: free energy (tr) %10.6f, (bound) %10.6f, (bound_rand) %10.6f" % (nsites, tr_E / nsites, bound_E / nsites,
-            #                                                                                            bound_rand_E / nsites)
-        print eps, bound_E-math.log(2), tr_E-math.log(2) # looks like eps**2
-
-
-        
-# def get_smpo_nn(eps):
-#     T = np.zeros([3,3,2,2])
-#     T[0,0,:,:] = I
-# 
-#     aeps = math.sqrt(abs(eps))
-#     if eps>0.:
-#        sgn = 1.0
-#     else:
-#        sgn = -1.0
-#     T[0,1,:,:] = aeps * Sz
-#     T[1,2,:,:] = sgn*aeps * Sz
-#     T[2,2,:,:] = I
-# 
-#     return T
-# 
-# #eps=0.1
-# #T = get_smpo_nn(eps)
-# #print 'xx',np.einsum('abii',T)
-# #print 'xx',np.einsum('abij,cdjk->ab',T,T)
-
-time_evol()
-#boundary_check()
+test()	
