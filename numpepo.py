@@ -117,15 +117,18 @@ def time_evol():
 	   logRenorm *= 2
 	   logRenorm += 2*math.log(Tnorm)
 	   T = T/Tnorm
+	   logRenorm += 4*math.log(Bnorm)
+	   bra = bra/Bnorm
 	T, bra = contract_down(T, bra, D)
         Z = np.dot(np.dot(bra, np.einsum("lrNN->lr", T)), bra)
+	print
 	print 'iter=',i
 	if scale:
-           print 'Z=',Z,math.log(Z)
-	   sumlnZ = math.log(Z)+logRenorm
+	   print 'Z=',Z,math.log(Z)
+	   sumlnZ = (math.log(Z)+logRenorm)
 	   print 'sum=',sumlnZ,math.exp(sumlnZ)
 	else:
-	   print 'Z=',Z
+	   print 'Z=',Z,math.log(Z)
 
 def boundary_check():
 
