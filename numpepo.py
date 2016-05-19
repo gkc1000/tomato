@@ -106,24 +106,26 @@ def time_evol():
     #
     # (1-eH)^N, ||H||^n get large very quickly.
     #
-    D = 10
+    D = 4
     logRenorm = 0.
-    logBra = 0.
+    scale = True #False
     for i in range(20):
 	Tnorm = np.linalg.norm(T)
 	Bnorm = np.linalg.norm(bra)
-	logRenorm += math.log(Tnorm)
-	logBra += math.log(Bnorm)
-	bra = bra/Bnorm
-	T = T/Tnorm
+	print 'Tnorm=',Tnorm,'Bnorm=',Bnorm
+	if scale:
+	   logRenorm *= 2
+	   logRenorm += 2*math.log(Tnorm)
+	   T = T/Tnorm
 	T, bra = contract_down(T, bra, D)
         Z = np.dot(np.dot(bra, np.einsum("lrNN->lr", T)), bra)
-        print
 	print 'iter=',i
-	print 'normOfT/Bra=',Tnorm,Bnorm,np.linalg.norm(Tnorm)
-        print 'Z=',Z,math.log(Z),logRenorm,logBra
-	sumlnZ = math.log(Z)+logRenorm+2*logBra
-	print 'sum=',sumlnZ
+	if scale:
+           print 'Z=',Z,math.log(Z)
+	   sumlnZ = math.log(Z)+logRenorm
+	   print 'sum=',sumlnZ,math.exp(sumlnZ)
+	else:
+	   print 'Z=',Z
 
 def boundary_check():
 
@@ -161,8 +163,9 @@ def boundary_check():
 
             nsites = 2**(i+1)
 
-            bound_E = (math.log(np.dot(np.dot(bra, M), bra.T)) + E_fac) / nsites
+	    bound_E = (math.log(np.dot(np.dot(bra, M), bra.T)) + E_fac) / nsites
             tr_E = (math.log(np.trace(M)) + E_fac)/nsites
+            print i,nsites*bound_E,nsites*tr_E
             
             #print "# sites %i: free energy (tr) %10.6f, (bound) %10.6f, (bound_rand) %10.6f" % (nsites, tr_E / nsites, bound_E / nsites,
             #                                                                                            bound_rand_E / nsites)
@@ -190,4 +193,5 @@ def boundary_check():
 # #print 'xx',np.einsum('abii',T)
 # #print 'xx',np.einsum('abij,cdjk->ab',T,T)
 
-#time_evol()
+time_evol()
+#boundary_check()
