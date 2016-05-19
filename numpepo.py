@@ -14,6 +14,39 @@ def modelN(T,n):
       Tmp = Tmp.reshape((s[0],s[1],s[2]*s[3],s[4]*s[5]))
    return Tmp
 
+def get_mpo_exp(eps, c, h=0, iop=0):
+   T = np.zeros([2,2,2,2])
+
+   aeps = math.sqrt(abs(eps))
+   if eps>0.:
+      sgn = 1.0
+   else:
+      sgn = -1.0
+
+   aeps = math.sqrt(abs(eps))
+   if eps>0.:
+      sgn = 1.0
+   else:
+      sgn = -1.0
+
+   if iop == 0:
+      T[0,0,:,:] = I
+      T[0,1,:,:] = aeps * math.sqrt(c) * Sz
+      T[1,0,:,:] = sgn * aeps * math.sqrt(c) * Sz
+      T[1,1,:,:] = c * I
+   else:
+      T[0,0,:,:] = I
+      T[0,1,:,:] = math.sqrt(c) * Sz
+      T[1,0,:,:] = eps * math.sqrt(c) * Sz
+      T[1,1,:,:] = c * I
+      
+   if abs(h) > 1.e-12: T[0,0] += eps*h*Sz
+
+   bra = np.zeros([2])
+   bra[0] = 1.
+
+   return T, bra
+
 def get_mpo_nn(eps,h=0,iop=0):
     T = np.zeros([2,2,2,2])
     T[0,0,:,:] = I
@@ -157,18 +190,20 @@ def contract_x(xsite,trT,logRenorm):
     return sumlnZ
 
 def test():
-    nclst = 2
+    nclst = 6
     tmp = 0
-    ns = 4 #10 #+ tmp #10
+    ns = 8 #10 #+ tmp #10
     eps = -0.01/2**(2+tmp) #11
-    D = 40 
+    D = 2
     res = [0]*2
     nsite = 40
+    c = 0.9
     for iop in [0,1]:
        print '='*20
        print 'iop=',iop
        print '='*20
-       T,bra = get_mpo_nn(eps,h=0.,iop=iop)
+       #T,bra = get_mpo_nn(eps,h=0.,iop=iop)
+       T,bra = get_mpo_exp(eps,c,h=0.,iop=iop)
        T = modelN(T,nclst)
        beta = abs(eps)*2**ns
        xsite = 10 
@@ -190,4 +225,4 @@ def test():
     print
     print res
 
-test()	
+#test()	
