@@ -18,7 +18,7 @@ def modelN(n,eps):
 def get_mpo_nn(eps):
     T = np.zeros([2,2,2,2])
     T[0,0,:,:] = I
-
+    
     aeps = math.sqrt(abs(eps))
     if eps>0.:
        sgn = 1.0
@@ -90,9 +90,9 @@ def heisenT(beta):
     W=np.array([[math.sqrt(math.cosh(beta)), math.sqrt(math.sinh(beta))],
                [math.sqrt(math.cosh(beta)), -math.sqrt(math.sinh(beta))]])
 
-    T=np.einsum("au,ad,al,ar->udlr",W,W,W,W)
+    #T=np.einsum("au,ad,al,ar->udlr",W,W,W,W)
+    T=np.einsum("al,ar->lr",W,W)
     return T
-
 
 def time_evol():
     eps = 0.01
@@ -125,6 +125,51 @@ def time_evol():
 	sumlnZ = math.log(Z)+logRenorm+2*logBra
 	print 'sum=',sumlnZ
 
+def boundary_check():
+
+   #M = heisenT(0.)
+
+   # different values of beta
+   # we are multiplying out (1-eps H)(1-eps H)
+   #
+   #
+   print "eps  E (from tr)  E (from bra/ket)"
+
+   for eps in [0, 0.005, 0.01, 0.02]:
+
+        #M = heisenT(math.sqrt(2)*eps)
+        T, bra = get_mpo_nn(eps) # boundary is vacuum state
+
+        D = 4
+        TT, bra = contract_down(T, bra, 4)
+        M = np.einsum("lrII->lr", TT)
+
+        E_fac = 0.
+
+        # a quick demonstration using the 
+        # Ising tensor, that the free energy is invariant to boundary
+
+        # do 2**20 sites
+        for i in range(20):
+            M = np.dot(M,M)
+            fac = np.linalg.norm(M)
+            M /= fac
+
+            E_fac *= 2
+            E_fac += math.log(fac)
+            #print E_fac
+
+            nsites = 2**(i+1)
+
+            bound_E = (math.log(np.dot(np.dot(bra, M), bra.T)) + E_fac) / nsites
+            tr_E = (math.log(np.trace(M)) + E_fac)/nsites
+            
+            #print "# sites %i: free energy (tr) %10.6f, (bound) %10.6f, (bound_rand) %10.6f" % (nsites, tr_E / nsites, bound_E / nsites,
+            #                                                                                            bound_rand_E / nsites)
+        print eps, bound_E-math.log(2), tr_E-math.log(2) # looks like eps**2
+
+
+        
 # def get_smpo_nn(eps):
 #     T = np.zeros([3,3,2,2])
 #     T[0,0,:,:] = I
@@ -145,4 +190,4 @@ def time_evol():
 # #print 'xx',np.einsum('abii',T)
 # #print 'xx',np.einsum('abij,cdjk->ab',T,T)
 
-time_evol()
+#time_evol()
