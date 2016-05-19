@@ -4,10 +4,10 @@ import scipy as sp
 import scipy.linalg
 
 I = np.eye(2)
-Sz = np.array([[.5, 0.], [0., -0.5]])
+Sz = 2*np.array([[.5, 0.], [0., -0.5]])
 
-def modelN(n,eps):
-   T,bra = get_mpo_nn(eps)
+def modelN(n,eps,h=0):
+   T,bra = get_mpo_nn(eps,h)
    Tmp = T.copy()
    for i in range(1,n):
       Tmp = np.einsum('lrud,rRUD->lRuUdD',Tmp,T)
@@ -15,7 +15,7 @@ def modelN(n,eps):
       Tmp = Tmp.reshape((s[0],s[1],s[2]*s[3],s[4]*s[5]))
    return Tmp,bra
 
-def get_mpo_nn(eps):
+def get_mpo_nn(eps,h=0):
     T = np.zeros([2,2,2,2])
     T[0,0,:,:] = I
     
@@ -27,6 +27,7 @@ def get_mpo_nn(eps):
     T[0,1,:,:] = aeps * Sz
     T[1,0,:,:] = sgn*aeps * Sz
     
+    if abs(h) > 1.e-12: T[0,0] += eps*h*Sz
     #T[0,1,:,:] = Sz
     #T[1,0,:,:] = eps*Sz
 
@@ -36,10 +37,16 @@ def get_mpo_nn(eps):
     return T, bra
 
 def hosvd(T,index_type):
+    s = T.shape
     if index_type == "l":
-        DM=np.einsum("ajkl,Ajkl->aA",T,T)
+        tmp = T.reshape(s[0],s[1]*s[2]*s[3])
+	DM = tmp.dot(tmp.T)
+	#DM=np.einsum("ajkl,Ajkl->aA",T,T)
     elif index_type == "r":
-        DM=np.einsum("ibkl,iBkl->bB",T,T)
+        tmp = T.transpose(1,0,2,3)
+        tmp = T.reshape(s[0],s[1]*s[2]*s[3])
+	DM = tmp.dot(tmp.T)
+	#DM=np.einsum("ibkl,iBkl->bB",T,T)
     elif index_type == "u":
         DM=np.einsum("ijcl,ijCl->cC",T,T)
     elif index_type == "d":
@@ -47,10 +54,13 @@ def hosvd(T,index_type):
     else:
         raise RuntimeError
     eig,vec=sp.linalg.eigh(DM)
+    print 'eig=',eig
     return eig, vec
 
 def contract_down(T, bra, D):
-    TT = np.einsum("lruI,LRId->lLrRud", T, T)
+    #TT = np.einsum("lruI,LRId->lLrRud", T, T)
+    TT = np.tensordot(T,T,axes=([3],[2])) # lruLRd
+    TT = TT.transpose(0,3,1,4,2,5)
 
     bb = np.einsum("l,L->lL", bra, bra)
     bb = np.reshape(bb, [bb.shape[0]*bb.shape[1]])
@@ -78,8 +88,11 @@ def contract_down(T, bra, D):
     #print "truncations", ltrunc, rtrunc
     
     # TT : lrud
-    TT = np.einsum("lrud,la->arud", TT, Ulr)
-    TT = np.einsum("lrud,ra->laud", TT, Ulr)
+    #TT = np.einsum("lrud,la->arud", TT, Ulr)
+    #TT = np.einsum("lrud,ra->laud", TT, Ulr)
+    TT = np.tensordot(TT,Ulr,axes=([0],[0])) # rudl
+    TT = np.tensordot(TT,Ulr,axes=([0],[0])) # udlr
+    TT = TT.transpose(2,3,0,1)
 
     bb = np.einsum("l,la->a", bb, Ulr)
 
@@ -95,21 +108,22 @@ def heisenT(beta):
     return T
 
 def time_evol():
-    eps = 0.01
-
+    ns = 11
+    eps = -0.01/2**ns
     #T0 = heisenT(eps)
     #Z0 = np.dot(np.dot(bra, np.einsum("lrNN->lr", T)), bra)
     
     T, bra = get_mpo_nn(eps)
-    #T,bra = modelN(2,eps)
+    nsite = 7
+    T,bra = modelN(nsite,eps,h=10)
 
     #
     # (1-eH)^N, ||H||^n get large very quickly.
     #
-    D = 4
+    D = 2
     logRenorm = 0.
     scale = True #False
-    for i in range(20):
+    for i in range(2+ns):
 	Tnorm = np.linalg.norm(T)
 	Bnorm = np.linalg.norm(bra)
 	print 'Tnorm=',Tnorm,'Bnorm=',Bnorm
@@ -126,9 +140,10 @@ def time_evol():
 	if scale:
 	   print 'Z=',Z,math.log(Z)
 	   sumlnZ = (math.log(Z)+logRenorm)
-	   print 'sum=',sumlnZ,math.exp(sumlnZ)
+	   print 'sum=',sumlnZ,math.exp(sumlnZ),sumlnZ/nsite
 	else:
 	   print 'Z=',Z,math.log(Z)
+
 
 def boundary_check():
 
