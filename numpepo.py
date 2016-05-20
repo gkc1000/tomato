@@ -4,7 +4,8 @@ import scipy as sp
 import scipy.linalg
 
 I = np.eye(2)
-Sz = 2*np.array([[.5, 0.], [0., -0.5]])
+Sz = np.array([[0.,0.],[0.,1.0]])
+#Sz = 2*np.array([[.5, 0.], [0., -0.5]])
 
 def modelN(T,n):
    Tmp = T.copy()
@@ -34,13 +35,18 @@ def get_mpo_exp(eps, c, h=0, iop=0):
       T[0,1,:,:] = aeps * math.sqrt(c) * Sz
       T[1,0,:,:] = sgn * aeps * math.sqrt(c) * Sz
       T[1,1,:,:] = c * I
-   else:
+   elif iop == 1:
       T[0,0,:,:] = I
       T[0,1,:,:] = math.sqrt(c) * Sz
       T[1,0,:,:] = eps * math.sqrt(c) * Sz
       T[1,1,:,:] = c * I
+   elif iop == 2:
+      T[0,0,:,:] = I
+      T[0,1,:,:] = Sz
+      T[1,0,:,:] = eps * c * Sz
+      T[1,1,:,:] = c * I
       
-   if abs(h) > 1.e-12: T[0,0] += eps*h*Sz
+   if abs(h) > 1.e-12: T[0,0] -= eps*h*Sz
 
    bra = np.zeros([2])
    bra[0] = 1.
@@ -92,6 +98,42 @@ def hosvd(T,index_type):
     print 'eig=',eig
     return eig, vec
 
+def contract_left(T, D):
+    def contract_down(T,D):
+       #TT = np.einsum("lruI,LRId->lLrRud", T, T)
+       TT = np.tensordot(T,T,axes=([3],[2])) # lruLRd
+       TT = TT.transpose(0,3,1,4,2,5)
+       TT = np.reshape(TT, [TT.shape[0]*TT.shape[1],
+                        TT.shape[2]*TT.shape[3],
+                        TT.shape[4],
+                        TT.shape[5]])
+       eigl, vecl = hosvd(TT,"l")
+       eigr, vecr = hosvd(TT,"r")
+       # make truncated lr basis
+       bigD=len(eigl)
+       Deff=min(D,bigD)
+       ltrunc=np.sum(eigl[:bigD-Deff])
+       rtrunc=np.sum(eigr[:bigD-Deff])
+       # choose either the left vectors or right vectors
+       # depending on which gives a smaller truncation
+       if Deff<bigD and ltrunc<rtrunc:
+           Ulr=vecl[:,bigD-Deff:bigD]
+       else:
+           Ulr=vecr[:,bigD-Deff:bigD]
+       print 'bigD/ltrunc/rtrunc=',bigD,ltrunc,rtrunc,bigD-Deff,Ulr.shape
+       print '     lsigs /rsigs =',np.sum(eigl),np.sum(eigr)
+       # TT : lrud
+       #TT = np.einsum("lrud,la->arud", TT, Ulr)
+       #TT = np.einsum("lrud,ra->laud", TT, Ulr)
+       TT = np.tensordot(TT,Ulr,axes=([0],[0])) # rudl
+       TT = np.tensordot(TT,Ulr,axes=([0],[0])) # udlr
+       TT = TT.transpose(2,3,0,1)
+       return TT
+    Tmp = T.transpose(2,3,0,1).copy()
+    Tmp = contract_down(Tmp, D)
+    Tmp = Tmp.transpose(2,3,0,1)
+    return Tmp
+
 def contract_down(T, bra, D):
     #TT = np.einsum("lruI,LRId->lLrRud", T, T)
     TT = np.tensordot(T,T,axes=([3],[2])) # lruLRd
@@ -104,9 +146,13 @@ def contract_down(T, bra, D):
                      TT.shape[2]*TT.shape[3],
                      TT.shape[4],
                      TT.shape[5]])
-                     
+          
+    TTnorm = np.linalg.norm(TT)
+    TT = TT/TTnorm
+    print 'TTnorm=',TTnorm
     eigl, vecl = hosvd(TT,"l")
     eigr, vecr = hosvd(TT,"r")
+    TT = TT*TTnorm
 
     # make truncated lr basis
     bigD=len(eigl)
@@ -120,10 +166,10 @@ def contract_down(T, bra, D):
     else:
         Ulr=vecr[:,bigD-Deff:bigD]
     print 'bigD/ltrunc/rtrunc=',bigD,ltrunc,rtrunc,bigD-Deff,Ulr.shape
-    
+    print '     lsigs /rsigs =',np.sum(eigl),np.sum(eigr)
     # TT : lrud
-    #TT = np.einsum("lrud,la->arud", TT, Ulr)
-    #TT = np.einsum("lrud,ra->laud", TT, Ulr)
+    #TTx = np.einsum("lrud,la->arud", TT, Ulr)
+    #TTx = np.einsum("lrud,ra->laud", TTx, Ulr)
     TT = np.tensordot(TT,Ulr,axes=([0],[0])) # rudl
     TT = np.tensordot(TT,Ulr,axes=([0],[0])) # udlr
     TT = TT.transpose(2,3,0,1)
@@ -136,12 +182,11 @@ def heisenT(beta):
     # Following notation of Xiang (http://arxiv.org/pdf/1201.1144v4.pdf)
     W=np.array([[math.sqrt(math.cosh(beta)), math.sqrt(math.sinh(beta))],
                [math.sqrt(math.cosh(beta)), -math.sqrt(math.sinh(beta))]])
-
     #T=np.einsum("au,ad,al,ar->udlr",W,W,W,W)
     T=np.einsum("al,ar->lr",W,W)
     return T
 
-def time_evol(T,bra,ns,nsite,D):
+def time_evol(T,bra,ns,D):
     #
     # (1-eH)^N, ||H||^n get large very quickly.
     #
@@ -158,6 +203,7 @@ def time_evol(T,bra,ns,nsite,D):
 	   logRenorm += 4*math.log(Bnorm)
 	   bra = bra/Bnorm
 	T, bra = contract_down(T, bra, D)
+	#T = contract_left(T,30)
  	trT = np.einsum("lrNN->lr", T)
         Z = np.dot(np.dot(bra, trT), bra)
 	print
@@ -165,7 +211,7 @@ def time_evol(T,bra,ns,nsite,D):
 	if scale:
 	   print 'Z=',Z,math.log(Z)
 	   sumlnZ = (math.log(Z)+logRenorm)
-	   print 'sum=',sumlnZ,math.exp(sumlnZ),sumlnZ/nsite
+	   print 'sum=',sumlnZ
 	else:
 	   print 'Z=',Z,math.log(Z)
 
@@ -189,25 +235,26 @@ def contract_x(xsite,trT,logRenorm):
     #sumlnZ = math.log(Z)+xsite*logRenorm
     return sumlnZ
 
-def test():
-    nclst = 6
-    tmp = 0
-    ns = 8 #10 #+ tmp #10
-    eps = -0.01/2**(2+tmp) #11
-    D = 2
-    res = [0]*2
-    nsite = 40
+def test(Din=None):
+    res = [0]*3
+    nclst = 2
+    ns = 5
+    eps = -0.0001 #0.1 #-0.01
     c = 0.9
-    for iop in [0,1]:
+    if Din == None:
+       D = 3
+    else:
+       D = Din
+    for iop in [0]:#,1,2]:
        print '='*20
        print 'iop=',iop
        print '='*20
        #T,bra = get_mpo_nn(eps,h=0.,iop=iop)
-       T,bra = get_mpo_exp(eps,c,h=0.,iop=iop)
+       T,bra = get_mpo_exp(eps,c,h=-0.001,iop=iop)
        T = modelN(T,nclst)
        beta = abs(eps)*2**ns
-       xsite = 10 
-       T,bra,trT,logRenorm = time_evol(T,bra,ns,nsite,D)
+       T,bra,trT,logRenorm = time_evol(T,bra,ns,D)
+       xsite = 20 
        sumlnZ = contract_x(xsite,trT,logRenorm)
        nsite = 2**xsite
        val = sumlnZ/(nsite*nclst)
@@ -216,13 +263,25 @@ def test():
        print 'nsite=',nsite
        print 'sum=',sumlnZ,val
        res[iop] = val 
-       trT = heisenT(beta)
-       sumlnZ = contract_x(xsite,trT,0.)
-       val = sumlnZ/nsite
-       print
-       print 'sum=',sumlnZ,val
+       #trT = heisenT(beta)
+       #sumlnZ = contract_x(xsite,trT,0.)
+       #val = sumlnZ/nsite
+       #print
+       #print 'ref=',sumlnZ,val
 
     print
     print res
+    return res[0]
 
-#test()	
+
+def testD():
+   import matplotlib.pyplot as plt
+   Dn  = [2,5,10,15,20,25,30,40,50]
+   res = [0]*len(Dn)
+   for idx,D in enumerate(Dn):
+      res[idx] = test(D)
+   print '\nResult=',res
+   plt.plot(Dn,res,marker='o',linewidth=2.0) 
+   plt.show()
+
+testD()
