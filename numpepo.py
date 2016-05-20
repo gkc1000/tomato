@@ -7,6 +7,7 @@ I = np.eye(2)
 Sz = np.array([[0.,0.],[0.,1.0]])
 #Sz = 2*np.array([[.5, 0.], [0., -0.5]])
 
+# X direction
 def modelN(T,n):
    Tmp = T.copy()
    for i in range(1,n):
@@ -14,6 +15,18 @@ def modelN(T,n):
       s = Tmp.shape
       Tmp = Tmp.reshape((s[0],s[1],s[2]*s[3],s[4]*s[5]))
    return Tmp
+
+# Y direction
+def modelM(T,bra,m):
+   Tmp = T.copy()
+   bb = bra.copy()
+   for i in range(1,m):
+      Tmp = np.einsum('lrud,LRdD->lLrRuD',Tmp,Tmp)
+      s = Tmp.shape
+      Tmp = Tmp.reshape((s[0]*s[1],s[2]*s[3],s[4],s[5]))
+      bb = np.einsum("l,L->lL", bb, bb)
+      bb = np.reshape(bb, [bb.shape[0]*bb.shape[1]])
+   return Tmp,bb 
 
 def get_mpo_exp(eps, c, h=0, iop=0):
    T = np.zeros([2,2,2,2])
@@ -136,6 +149,7 @@ def contract_left(T, D):
 
 def contract_down(T, bra, D):
     #TT = np.einsum("lruI,LRId->lLrRud", T, T)
+
     TT = np.tensordot(T,T,axes=([3],[2])) # lruLRd
     TT = TT.transpose(0,3,1,4,2,5)
 
@@ -146,7 +160,7 @@ def contract_down(T, bra, D):
                      TT.shape[2]*TT.shape[3],
                      TT.shape[4],
                      TT.shape[5]])
-          
+    
     TTnorm = np.linalg.norm(TT)
     TT = TT/TTnorm
     print 'TTnorm=',TTnorm
@@ -238,9 +252,10 @@ def contract_x(xsite,trT,logRenorm):
 def test(Din=None):
     res = [0]*3
     nclst = 2
-    ns = 5
-    eps = -0.0001 #0.1 #-0.01
-    c = 0.9
+    nlayer = 1 #2 
+    ns = 8+1
+    eps = -0.01/4/2 #nlayer #0.1 #-0.01
+    c = 0.5
     if Din == None:
        D = 3
     else:
@@ -252,6 +267,7 @@ def test(Din=None):
        #T,bra = get_mpo_nn(eps,h=0.,iop=iop)
        T,bra = get_mpo_exp(eps,c,h=-0.001,iop=iop)
        T = modelN(T,nclst)
+       T,bra = modelM(T,bra,nlayer)
        beta = abs(eps)*2**ns
        T,bra,trT,logRenorm = time_evol(T,bra,ns,D)
        xsite = 20 
@@ -284,4 +300,5 @@ def testD():
    plt.plot(Dn,res,marker='o',linewidth=2.0) 
    plt.show()
 
-testD()
+#testD()
+test(Din=10)
