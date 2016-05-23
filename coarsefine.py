@@ -55,7 +55,7 @@ def test():
     res = [0]*3
     nlayer = 1 #2 
     
-    ns = 3
+    ns = 5
     eps = -0.01/4/2 #nlayer #0.1 #-0.01
     beta = abs(eps)*2**ns
     print 'eps =',eps
@@ -79,6 +79,27 @@ def test():
     print 'val1=',val1
 
     D = 30
+    nclst0 = 6
+    c = c6
+    T,bra = numpepo.get_mpo_exp(eps,c,h=0.,iop=0)
+    T = numpepo.modelN(T,nclst0)
+    T,bra = numpepo.modelM(T,bra,nlayer)
+    # Map
+    ct = ctensor(nclst0,nmax=1)
+    ct0 = np.zeros((2,ct.shape[1]))
+    ct0[0] = ct[0]
+    icase = 0 #1
+    if icase == 0:
+       for iclst in range(1,nclst0+1):
+          ct0[1] += ct[iclst]
+       ct0[1] = ct0[1]/math.sqrt(nclst0)
+    else:
+       ct0[1] = ct[1]
+    T = np.einsum('uU,lrUD,dD->lrud',ct0,T,ct0)
+    val2,T2 = evol(T,bra,ns,D,nclst0)
+    print 'val2=',val2
+
+    D = 30
     nclst = 1
     c = c2
     T,bra = numpepo.get_mpo_exp(eps,c,h=0.,iop=0)
@@ -87,7 +108,7 @@ def test():
     val2b,T2b = evol(T,bra,ns,D,nclst)
     print 'val2b=',val2b
 
-    D = 30
+    D = 10
     nclst = 2
     c = c2
     T,bra = numpepo.get_mpo_exp(eps,c,h=0.,iop=0)
@@ -96,36 +117,16 @@ def test():
     val2c,T2c = evolNEW(T,bra,ns,D,nclst,T1)
     print 'val2c=',val2c
 
-    D = 30
-    nclst = 4
-    c = c4
-    T,bra = numpepo.get_mpo_exp(eps,c,h=0.,iop=0)
-    T = numpepo.modelN(T,nclst)
-    T,bra = numpepo.modelM(T,bra,nlayer)
-    # Map
-    ct = ctensor(nclst,nmax=1)
-    ct0 = np.zeros((2,ct.shape[1]))
-    ct0[0] = ct[0]
-    for iclst in range(1,nclst+1):
-       ct0[1] += ct[iclst]
-    ct0[1] = ct0[1]/math.sqrt(nclst)
-    #ct0 = np.zeros((2,ct.shape[1]))
-    #ct0[0] = ct[0]
-    #ct0[1] = ct[1]
-    T = np.einsum('uU,lrUD,dD->lrud',ct0,T,ct0)
-    val2,T2 = evol(T,bra,ns,D,nclst)
-    print 'val2=',val2
-
     print 
     print 'c1/c2/c4/c6=',c1,c2,c4,c6
     print 'val1 =',val1
-    print 'val2b=',val2b
-    print 'val2c=',val2c
     print 'T1.shape =',T1.shape
-    print 'T2b.shape=',T2b.shape
-    print 'T2c.shape=',T2c.shape
-    print 'val2 =',val2*nclst
+    print 'val2 =',val2*nclst0
     print 'T2.shape =',T2.shape
+    print 'val2b=',val2b
+    print 'T2b.shape=',T2b.shape
+    print 'val2c=',val2c
+    print 'T2c.shape=',T2c.shape
     return 0
 
 
@@ -205,13 +206,13 @@ def contract_down(T, bra, D, nclst, T0):
        ct0[1] += ct[iclst]
     ct0[1] = ct0[1]/math.sqrt(nclst)
 
-    # (4, 4, 2, 2) => (4,4,2,16)
-    T0c = np.einsum('lrud,dD->lruD',T0,ct0)
-    # (2,16)
-    T0x = np.einsum('lluD->uD',T0c)
-    TT0 = np.einsum('uU,lrUD,dD->lrud',T0x,TT,T0x)
+#    # (4, 4, 2, 2) => (4,4,2,16)
+#    T0c = np.einsum('lrud,dD->lruD',T0,ct0)
+#    # (2,16)
+#    T0x = np.einsum('lluD->uD',T0c)
+#    TT0 = np.einsum('uU,lrUD,dD->lrud',T0x,TT,T0x)
 
-#    TT0 = np.einsum('uU,lrUD,dD->lrud',ct0,TT,ct0)
+    TT0 = np.einsum('uU,lrUD,dD->lrud',ct0,TT,ct0)
 
     TTnorm = np.linalg.norm(TT0)
     TT0 = TT0/TTnorm
