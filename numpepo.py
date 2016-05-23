@@ -301,4 +301,4 @@ def testD():
    plt.show()
 
 #testD()
-test(Din=10)
+#test(Din=10)

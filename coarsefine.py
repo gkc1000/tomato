@@ -22,6 +22,23 @@ import itertools
 # 1D interaction: V(x) = exp(-lambda*|x|)
 ###########################################
 
+def ctensorAverage(nclst0,nmax=1,icase=0):
+    ct = ctensor(nclst0,nmax)
+    ct0 = np.zeros((nmax+1,ct.shape[1]))
+    ct0[0] = ct[0]
+    if icase == 0:
+       ioff = 1
+       for nm in range(1,nmax+1):
+	  ndim = int(binom(nclst0,nm))
+	  for iclst in range(ndim):
+             ct0[nm] += ct[ioff]
+	     ioff +=1
+          ct0[nm] = ct0[nm]/math.sqrt(ndim)
+    else:
+       ct0[1] = ct[1]
+    # print ct0.dot(ct0.T) - should be identity
+    return ct0
+
 def ctensor(n,nmax=1):
 # 
 # [1, 1, 0, 0, 0]
@@ -85,22 +102,25 @@ def test():
     T = numpepo.modelN(T,nclst0)
     T,bra = numpepo.modelM(T,bra,nlayer)
     # Map
-    ct = ctensor(nclst0,nmax=1)
-    ct0 = np.zeros((2,ct.shape[1]))
-    ct0[0] = ct[0]
-    icase = 0 #1
-    if icase == 0:
-       for iclst in range(1,nclst0+1):
-          ct0[1] += ct[iclst]
-       ct0[1] = ct0[1]/math.sqrt(nclst0)
-    else:
-       ct0[1] = ct[1]
+    ct0 = ctensorAverage(nclst0,nmax=1,icase=0)
     T = np.einsum('uU,lrUD,dD->lrud',ct0,T,ct0)
     val2,T2 = evol(T,bra,ns,D,nclst0)
     print 'val2=',val2
 
     D = 30
-    nclst = 1
+    nclst0 = 6
+    c = c6
+    T,bra = numpepo.get_mpo_exp(eps,c,h=0.,iop=0)
+    T = numpepo.modelN(T,nclst0)
+    T,bra = numpepo.modelM(T,bra,nlayer)
+    # Map
+    ct0 = ctensorAverage(nclst0,nmax=6,icase=0)
+    T = np.einsum('uU,lrUD,dD->lrud',ct0,T,ct0)
+    val3,T3 = evol(T,bra,ns,D,nclst0)
+    print 'val3=',val3
+
+    D = 10
+    nclst = 2
     c = c2
     T,bra = numpepo.get_mpo_exp(eps,c,h=0.,iop=0)
     T = numpepo.modelN(T,nclst)
@@ -123,6 +143,9 @@ def test():
     print 'T1.shape =',T1.shape
     print 'val2 =',val2*nclst0
     print 'T2.shape =',T2.shape
+    print 'val3 =',val3*nclst0
+    print 'T3.shape =',T3.shape
+    print
     print 'val2b=',val2b
     print 'T2b.shape=',T2b.shape
     print 'val2c=',val2c
