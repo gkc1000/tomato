@@ -1,7 +1,7 @@
 import numpy as np
 import bsarray as bs
 import re
-import numpy_helper
+#import numpy_helper
 import null
 
 DEBUG=False
