@@ -53,7 +53,7 @@ def ctensor(n,nmax=1):
 
 def test():
     res = [0]*3
-    nlayer = 1 #2 
+    nlayer = 1 
     
     ns = 5
     eps = -0.01/4/2 #nlayer #0.1 #-0.01
@@ -64,10 +64,10 @@ def test():
     lambda0 = 1.0
     c1 = math.exp(-lambda0) # h=1.0
     c2 = math.exp(-lambda0/2.0) # h=0.5
-    c4 = math.exp(-lambda0/4.0) # h=0.5
-    c6 = math.exp(-lambda0/6.0) # h=0.1
-    print 'c1/c2/c4/c10=',c1,c2,c4,c6
-    # c1/c2/c10= 0.367879441171 0.606530659713 0.904837418036
+    c4 = math.exp(-lambda0/4.0) # 
+    c6 = math.exp(-lambda0/6.0) # 
+    print 'c1/c2/c4/c6=',c1,c2,c4,c6
+    # c1/c2/c4/c6= 0.367879441171 0.606530659713 0.778800783071 0.846481724891
 
     D = 30
     nclst = 1
